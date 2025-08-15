@@ -1,1 +1,1 @@
-python3 tgcall-miniapp/miniapp/signaling_server.py
+python3 miniapp/signaling_server.py
