@@ -1,6 +1,7 @@
 import asyncio
 import websockets
 import json
+import os  # добавлено для работы с переменными окружения
 
 # Словарь: session_id -> set of websockets
 sessions = {}
@@ -28,7 +29,8 @@ async def handler(websocket):
 
 if __name__ == "__main__":
     async def main():
-        async with websockets.serve(handler, "0.0.0.0", 8765):
-            print("Signaling server started on ws://0.0.0.0:8765")
+        port = int(os.environ.get("PORT", 8765))  # используем порт из переменной окружения
+        async with websockets.serve(handler, "0.0.0.0", port):
+            print(f"Signaling server started on ws://0.0.0.0:{port}")
             await asyncio.Future()  # run forever
     asyncio.run(main())
