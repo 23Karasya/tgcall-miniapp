@@ -1,1 +1,1 @@
-python3 miniapp/signaling_server.py
+web: python3 [signaling_server.py](http://_vscodecontentref_/0)
