@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Mini App Call</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
+        .container { max-width: 400px; margin: 40px auto; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px #0001; padding: 24px; text-align: center; }
+        .call-status { font-size: 1.2em; margin-bottom: 16px; }
+        .timer { font-size: 2em; margin-bottom: 24px; }
+        .btn { padding: 12px 32px; font-size: 1em; border: none; border-radius: 6px; background: #0088cc; color: #fff; cursor: pointer; }
+        .btn.end { background: #e74c3c; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="call-status" id="callStatus">Соединение...</div>
+    <div class="timer" id="timer">00:00</div>
+    <button class="btn end" id="endCallBtn">Сбросить</button>
+</div>
+<script>
+// --- Таймер ---
+let seconds = 0;
+let timerInterval;
+function startTimer() {
+    timerInterval = setInterval(() => {
+        seconds++;
+        const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+        const s = String(seconds % 60).padStart(2, '0');
+        document.getElementById('timer').textContent = `${m}:${s}`;
+    }, 1000);
+}
+function stopTimer() {
+    clearInterval(timerInterval);
+}
+
+// --- WebRTC ---
+const sessionId = new URLSearchParams(window.location.search).get('session') || 'test';
+const signalingUrl = 'ws://localhost:8765'; // Замените на ваш сервер
+let pc;
+let ws;
+let localStream;
+
+async function startCall() {
+    document.getElementById('callStatus').textContent = 'Идёт звонок';
+    startTimer();
+    ws = new WebSocket(signalingUrl);
+    ws.onopen = () => {
+        ws.send(JSON.stringify({type: 'join', session: sessionId}));
+    };
+    ws.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'offer') {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws.send(JSON.stringify({type: 'answer', answer, session: sessionId}));
+        } else if (data.type === 'answer') {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+        } else if (data.type === 'ice') {
+            try {
+                await pc.addIceCandidate(data.candidate);
+            } catch (e) {}
+        }
+    };
+
+    localStream = await navigator.mediaDevices.getUserMedia({audio: true, video: false});
+    pc = new RTCPeerConnection();
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            ws.send(JSON.stringify({type: 'ice', candidate: event.candidate, session: sessionId}));
+        }
+    };
+    pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+            endCall();
+        }
+    };
+    pc.ontrack = (event) => {
+        // Можно добавить проигрывание аудио: event.streams[0]
+        let audio = document.getElementById('remoteAudio');
+        if (!audio) {
+            audio = document.createElement('audio');
+            audio.id = 'remoteAudio';
+            audio.autoplay = true;
+            document.body.appendChild(audio);
+        }
+        audio.srcObject = event.streams[0];
+    };
+
+    // Если второй участник уже в комнате, инициируем offer
+    ws.onopen = () => {
+        ws.send(JSON.stringify({type: 'join', session: sessionId}));
+        setTimeout(async () => {
+            if (pc.signalingState === 'stable') {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                ws.send(JSON.stringify({type: 'offer', offer, session: sessionId}));
+            }
+        }, 1000);
+    };
+}
+
+function endCall() {
+    stopTimer();
+    document.getElementById('callStatus').textContent = 'Звонок завершён';
+    if (pc) pc.close();
+    if (ws) ws.close();
+    if (localStream) localStream.getTracks().forEach(t => t.stop());
+    setTimeout(() => {
+        if (window.Telegram && Telegram.WebApp) {
+            Telegram.WebApp.close();
+        } else {
+            window.close();
+        }
+    }, 800);
+}
+
+document.getElementById('endCallBtn').onclick = endCall;
+
+window.onload = function() {
+    startCall();
+};
+</script>
+</body>
+</html>
