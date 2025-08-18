@@ -1,7 +1,9 @@
+
 import asyncio
 import websockets
 import json
-import os  # добавлено для работы с переменными окружения
+import os
+from aiohttp import web
 
 # Словарь: session_id -> set of websockets
 sessions = {}
@@ -27,10 +29,22 @@ async def handler(websocket):
             if not sessions[session_id]:
                 del sessions[session_id]
 
+async def healthcheck(request):
+    return web.Response(text="OK")
+
+async def main():
+    port = int(os.environ.get("PORT", 8765))
+    # HTTP healthcheck endpoint
+    app = web.Application()
+    app.router.add_get("/", healthcheck)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    # WebSocket server
+    async with websockets.serve(handler, "0.0.0.0", port):
+        print(f"Signaling server started on ws://0.0.0.0:{port}")
+        await asyncio.Future()  # run forever
+
 if __name__ == "__main__":
-    async def main():
-        port = int(os.environ.get("PORT", 8765))  # используем порт из переменной окружения
-        async with websockets.serve(handler, "0.0.0.0", port):
-            print(f"Signaling server started on ws://0.0.0.0:{port}")
-            await asyncio.Future()  # run forever
     asyncio.run(main())
