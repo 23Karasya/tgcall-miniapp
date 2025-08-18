@@ -18,14 +18,18 @@ async def websocket_handler(request):
                 if data['type'] == 'join':
                     session_id = data['session']
                     if session_id not in sessions:
-                        sessions[session_id] = set()
-                    sessions[session_id].add(ws)
+                        sessions[session_id] = []
+                    if ws not in sessions[session_id]:
+                        sessions[session_id].append(ws)
+                    # Сообщаем клиенту его номер (1 или 2)
+                    position = sessions[session_id].index(ws) + 1
+                    await ws.send_str(json.dumps({'type': 'joined', 'position': position}))
                 elif data['type'] in ('offer', 'answer', 'ice'):
-                    for peer in sessions.get(session_id, set()):
+                    for peer in sessions.get(session_id, []):
                         if peer != ws:
                             await peer.send_str(msg.data)
     finally:
-        if session_id and ws in sessions.get(session_id, set()):
+        if session_id and ws in sessions.get(session_id, []):
             sessions[session_id].remove(ws)
             if not sessions[session_id]:
                 del sessions[session_id]

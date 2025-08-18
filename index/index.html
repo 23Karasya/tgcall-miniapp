@@ -47,6 +47,7 @@ async function startCall() {
     document.getElementById('callStatus').textContent = 'Идёт звонок';
     startTimer();
     ws = new WebSocket(signalingUrl);
+    let myPosition = null;
     ws.onopen = () => {
         console.log('[WebSocket] open');
         ws.send(JSON.stringify({type: 'join', session: sessionId}));
@@ -54,7 +55,20 @@ async function startCall() {
     ws.onmessage = async (event) => {
         const data = JSON.parse(event.data);
         console.log('[WebSocket] message:', data);
-        if (data.type === 'offer') {
+        if (data.type === 'joined') {
+            myPosition = data.position;
+            // Только второй участник инициирует offer
+            if (myPosition === 2) {
+                setTimeout(async () => {
+                    if (pc.signalingState === 'stable') {
+                        const offer = await pc.createOffer();
+                        await pc.setLocalDescription(offer);
+                        ws.send(JSON.stringify({type: 'offer', offer, session: sessionId}));
+                        console.log('[WebRTC] sent offer', offer);
+                    }
+                }, 1000);
+            }
+        } else if (data.type === 'offer') {
             await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
@@ -113,19 +127,6 @@ async function startCall() {
         }).catch(e => {
             console.error('[Media] remote audio playback error:', e);
         });
-    };
-
-    // Если второй участник уже в комнате, инициируем offer
-    ws.onopen = () => {
-        ws.send(JSON.stringify({type: 'join', session: sessionId}));
-        setTimeout(async () => {
-            if (pc.signalingState === 'stable') {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                ws.send(JSON.stringify({type: 'offer', offer, session: sessionId}));
-                console.log('[WebRTC] sent offer', offer);
-            }
-        }, 1000);
     };
 }
 
