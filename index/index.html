@@ -38,7 +38,7 @@ function stopTimer() {
 
 // --- WebRTC ---
 const sessionId = new URLSearchParams(window.location.search).get('session') || 'test';
-const signalingUrl = 'ws://localhost:8765'; // Замените на ваш сервер
+const signalingUrl = 'wss://tgcall-miniapp-production.up.railway.app/'; // Railway production server
 let pc;
 let ws;
 let localStream;
