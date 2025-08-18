@@ -1,1 +1,1 @@
-web: python miniapp/signaling_server.py
+web: python3 miniapp/signaling_server.py
